@@ -1,0 +1,10 @@
+[Unit]
+Description=German-English dictionary, Django on gunicorn (dict.darmok.link)
+
+[Service]
+WorkingDirectory=/home/james/dict
+ExecStart=/home/james/dict/.venv/bin/gunicorn config.wsgi -b 127.0.0.1:8793 -w 2 --access-logfile -
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

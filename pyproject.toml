@@ -1,0 +1,10 @@
+[project]
+name = "dict"
+version = "0.1.0"
+description = "German-English dictionary (dict.darmok.link)"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.2,<6",
+    "gunicorn",
+    "whitenoise",
+]

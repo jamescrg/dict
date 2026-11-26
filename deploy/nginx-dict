@@ -1,0 +1,36 @@
+# behind devauth (one login for every dev site)
+# dict.darmok.link  ->  127.0.0.1:8793  (dict user service, ~/dict)
+# Installed by /home/james/dict/deploy/setup-site.sh.
+server {
+    server_name dict.darmok.link;
+
+    include snippets/security.conf;
+    include snippets/devauth-guard.conf;
+
+    # A lookup on every keystroke: the roomier zone.
+    location /api/ {
+        limit_req zone=api burst=60 nodelay;
+        include proxy_params;
+        proxy_pass http://127.0.0.1:8793;
+    }
+
+    location / {
+        limit_req zone=general burst=20 nodelay;
+        include proxy_params;
+        proxy_pass http://127.0.0.1:8793;
+    }
+
+    listen [::]:443 ssl;
+    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/dict.darmok.link/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/dict.darmok.link/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name dict.darmok.link;
+    return 301 https://$host$request_uri;
+}

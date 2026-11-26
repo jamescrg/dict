@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- an open book, the Android app's launcher shape: the blog's aqua on light tabs, the sheet color
+       on dark tabs; the right-hand page paler, as the launcher's two pages differ -->
+  <style>
+    path { fill: #427b58; }
+    @media (prefers-color-scheme: dark) { path { fill: #eeebe6; } }
+  </style>
+  <path d="M1.5,4.5 L11,7.2 V20.5 L1.5,17.8Z"/>
+  <path d="M22.5,4.5 L13,7.2 V20.5 L22.5,17.8Z" opacity="0.55"/>
+</svg>

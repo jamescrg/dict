@@ -1,0 +1,286 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Wörterbuch">
+<meta name="theme-color" content="#f2f0ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#282828" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="{% static 'lookup/favicon.svg' %}" type="image/svg+xml">
+<link rel="icon" href="{% static 'lookup/icon-192.png' %}" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{% static 'lookup/icon-180.png' %}">
+<!-- use-credentials: the manifest sits behind the devauth login like everything else -->
+<link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">
+<title>Wörterbuch</title>
+<style>
+  /* Light: the blog's paper version of Gruvbox light (~/blog/static/css/base.css),
+     as on the sibling sites: its paper, ink let down with the paper, muted text
+     and aqua accent, with washes of ink where the Android app has darker creams.
+     Dark: the Android app's Gruvbox dark (dict-android, res/values-night/colors.xml). */
+  :root {
+    color-scheme: light;
+    --paper: #f2f0ea; --ink: oklch(0.344 0.007 48.379);
+    --bg: var(--paper);
+    --bg-raised: color-mix(in srgb, var(--ink) 7%, var(--paper));
+    --bg-selected: color-mix(in srgb, var(--ink) 15%, var(--paper));
+    --fg: color-mix(in srgb, var(--ink) 88%, var(--paper));
+    --fg-secondary: color-mix(in srgb, var(--ink) 75%, var(--paper));
+    --fg-muted: oklch(0.50 0.023 62.529);
+    /* annotations: paler than the muted text, to stand apart from the English line */
+    --note: color-mix(in srgb, var(--fg-muted) 72%, var(--paper));
+    --accent: oklch(0.534 0.082 155.435); --lemma: #af3a03;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #282828; --bg-raised: #3c3836; --bg-selected: #504945;
+      --fg: #ebdbb2; --fg-secondary: #d5c4a1; --fg-muted: #928374; --note: var(--fg-muted);
+      --accent: #fabd2f; --lemma: #fe8019;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  ::selection { background: var(--bg-selected); }
+  main { max-width: 720px; margin: 0 auto; padding-bottom: env(safe-area-inset-bottom); }
+
+  /* the search bar stays put while the results scroll under it */
+  .bar {
+    position: sticky; top: 0; z-index: 1; background: var(--bg);
+    display: flex; align-items: center;
+    padding: calc(8px + env(safe-area-inset-top)) 4px 4px 12px;
+  }
+  #q {
+    flex: 1; min-width: 0; min-height: 48px; padding: 4px;
+    font: inherit; font-size: 20px; color: var(--fg); caret-color: var(--accent);
+    background: transparent; border: 0; border-bottom: 1px solid var(--fg-muted); border-radius: 0;
+    outline: none;
+  }
+  #q:focus { border-bottom: 2px solid var(--accent); padding-bottom: 3px; }
+  #q::placeholder { color: var(--fg-muted); opacity: 1; }
+  .bar button {
+    width: 48px; height: 48px; flex: none; padding: 0;
+    font: inherit; font-size: 20px; color: var(--fg-muted);
+    background: transparent; border: 0; border-radius: 50%; cursor: pointer;
+  }
+  .bar button:hover { background: var(--bg-raised); }
+  button:focus-visible, .row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  #status {
+    margin: 0; padding: 32px; text-align: center; white-space: pre-line;
+    color: var(--fg-muted); line-height: 1.5;
+  }
+  #status:empty { display: none; }
+
+  #list { list-style: none; margin: 0; padding: 0; }
+  #list li + li { border-top: 1px solid var(--bg-raised); }
+  .row {
+    display: block; width: 100%; min-height: 48px; text-align: left;
+    font: inherit; color: var(--fg); background: transparent; border: 0; border-radius: 0;
+    cursor: pointer; -webkit-user-select: text; user-select: text;
+  }
+  .hit { padding: 10px 16px; }
+  .hit:hover { background: color-mix(in srgb, var(--bg-raised) 45%, var(--bg)); }
+  .de { display: block; font-size: 17px; }
+  .en { display: block; margin-top: 2px; color: var(--fg-secondary); }
+  .hint { padding: 8px 16px; background: var(--bg-raised); }
+  .hint b { color: var(--lemma); }
+  .note { color: var(--note); }  /* Ding's {grammar}, [field] and (comments) */
+
+  dialog {
+    width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 48px);
+    padding: 0; border: 0; border-radius: 20px;
+    background: var(--bg-raised); color: var(--fg);
+  }
+  dialog[open] { display: flex; flex-direction: column; }
+  dialog::backdrop { background: rgb(0 0 0 / .5); }
+  #dialog-body { overflow-y: auto; padding: 24px 24px 8px; }
+  #dialog-body h2 { margin: 0 0 16px; font-size: 20px; font-weight: 500; }
+  #dialog-body p { margin: 0 0 16px; white-space: pre-line; overflow-wrap: anywhere; }
+  #dialog-body .en { color: inherit; margin-top: 0; }
+  #dialog-body a { color: var(--accent); }
+  dialog form { flex: none; padding: 0 12px 12px; text-align: right; }
+  dialog form button {
+    min-height: 40px; padding: 8px 16px; font: inherit; font-weight: 600; color: var(--accent);
+    background: transparent; border: 0; border-radius: 20px; cursor: pointer;
+  }
+  dialog form button:hover { background: var(--bg-selected); }
+</style>
+</head>
+<body>
+<main>
+  <div class="bar">
+    <input id="q" type="text" inputmode="search" enterkeyhint="search" placeholder="Deutsch or English"
+           aria-label="Search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" autofocus>
+    <button id="clear" type="button" aria-label="Clear" title="Clear (Esc)">✕</button>
+    <button id="about" type="button" aria-label="About" title="About">ⓘ</button>
+  </div>
+  <p id="status" role="status"></p>
+  <ul id="list"></ul>
+</main>
+
+<dialog id="dialog">
+  <div id="dialog-body"></div>
+  <form method="dialog"><button>Close</button></form>
+</dialog>
+
+<script>
+(function () {
+  "use strict";
+  var INTRO = "Type a word in German or English.\n\nInflected forms work too: try “ging”, “Häusern” or “fing an”.";
+  var input = document.getElementById("q");
+  var status = document.getElementById("status");
+  var list = document.getElementById("list");
+  var dialog = document.getElementById("dialog");
+  var dialogBody = document.getElementById("dialog-body");
+
+  /* Bumped on every keystroke, so that results for an older query are dropped. */
+  var generation = 0;
+  var timer = 0;
+  var pending = null;
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  /* Greys out Ding's annotations: {grammar}, [region or field] and (comments). */
+  function annotated(parent, text) {
+    var re = /\{[^}]*\}|\[[^\]]*\]|\([^)]*\)/g, at = 0, m;
+    while ((m = re.exec(text))) {
+      if (m.index > at) parent.append(text.slice(at, m.index));
+      parent.append(el("span", "note", m[0]));
+      at = m.index + m[0].length;
+    }
+    if (at < text.length) parent.append(text.slice(at));
+    return parent;
+  }
+
+  function getJSON(path, signal) {
+    return fetch(path, { signal: signal, credentials: "same-origin" }).then(function (r) {
+      // The devauth session ran out: the login page comes back instead. Reload to go through it.
+      if (r.redirected || r.status === 401) { location.reload(); throw new Error("login"); }
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    });
+  }
+
+  function setQuery(text) {
+    input.value = text;
+    input.focus();
+    search(true);
+  }
+
+  /* The address follows the query, so a lookup can be bookmarked, shared or
+     opened from elsewhere as /?q=word. */
+  function remember(query) {
+    var url = query.trim() ? "?q=" + encodeURIComponent(query.trim()) : location.pathname;
+    try { history.replaceState(null, "", url); } catch (e) {}
+  }
+
+  function search(now) {
+    var query = input.value;
+    var mine = ++generation;
+    clearTimeout(timer);
+    if (pending) pending.abort();
+    remember(query);
+    if (!query.trim()) { show(query, { hints: [], hits: [] }); return; }
+    timer = setTimeout(function () {
+      pending = new AbortController();
+      getJSON("api/search?q=" + encodeURIComponent(query), pending.signal).then(function (results) {
+        if (mine === generation) show(query, results);
+      }).catch(function (e) {
+        if (mine === generation && e.name !== "AbortError" && e.message !== "login") {
+          list.replaceChildren();
+          status.textContent = "Couldn’t reach the dictionary. Check the connection, or reload the page to log in again.";
+        }
+      });
+    }, now ? 0 : 90);
+  }
+
+  function show(query, results) {
+    var typed = query.trim();
+    var rows = [];
+    results.hints.forEach(function (hint) {
+      var b = el("button", "row hint");
+      b.type = "button";
+      b.append(typed + " — " + hint.kind + " of ", el("b", null, hint.lemma));
+      b.addEventListener("click", function () { setQuery(hint.lemma); });
+      rows.push(b);
+    });
+    results.hits.forEach(function (hit) {
+      var b = el("button", "row hit");
+      b.type = "button";
+      b.append(annotated(el("span", "de"), hit.de), annotated(el("span", "en"), hit.en));
+      b.addEventListener("click", function () {
+        // Dragging across a row to copy from it shouldn't open it.
+        if (!String(getSelection()).trim()) showLine(hit);
+      });
+      rows.push(b);
+    });
+    list.replaceChildren.apply(list, rows.map(function (row) {
+      var li = el("li");
+      li.append(row);
+      return li;
+    }));
+    window.scrollTo(0, 0);
+    status.textContent = !typed ? INTRO : rows.length ? "" : "No entries for “" + typed + "”.";
+  }
+
+  function open(nodes) {
+    dialogBody.replaceChildren.apply(dialogBody, nodes);
+    dialogBody.scrollTop = 0;
+    if (!dialog.open) dialog.showModal();
+  }
+
+  /* The whole Ding line a result belongs to, with the tapped sub-entry in bold. */
+  function showLine(hit) {
+    getJSON("api/line?id=" + hit.line).then(function (data) {
+      open(data.pairs.map(function (pair, i) {
+        var p = el("p");
+        var de = annotated(el(i === hit.sub ? "b" : "span"), pair[0]);
+        p.append(de, "\n", annotated(el("span", "en"), pair[1]));
+        return p;
+      }));
+    }).catch(function () {});
+  }
+
+  function showAbout() {
+    getJSON("api/about").then(function (m) {
+      function link(url) { var a = el("a", null, url); a.href = url; a.rel = "noopener"; return a; }
+      var ding = el("p"), forms = el("p");
+      ding.append("Dictionary: Ding German–English, version " + m.ding_version + " (" + m.lines +
+                  " entries). © Frank Richter, 1995–2026. GNU General Public License, version 2 or later. ",
+                  link("https://dict.zero-g.net/"));
+      forms.append("Inflected forms (" + m.forms + "): Wiktionary, by way of Kaikki.org. " +
+                   "Creative Commons Attribution-ShareAlike 4.0. ", link("https://kaikki.org/"));
+      open([el("h2", null, "Wörterbuch"), ding, forms]);
+    }).catch(function () {});
+  }
+
+  input.addEventListener("input", function () { search(false); });
+  input.addEventListener("keydown", function (e) { if (e.key === "Enter") search(true); });
+  document.getElementById("clear").addEventListener("click", function () { setQuery(""); });
+  document.getElementById("about").addEventListener("click", showAbout);
+  // A click on the backdrop closes the dialog, as a tap outside does on the phone.
+  dialog.addEventListener("click", function (e) { if (e.target === dialog) dialog.close(); });
+  dialog.addEventListener("close", function () { input.focus(); });
+  document.addEventListener("keydown", function (e) {
+    if (dialog.open || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === "Escape") { setQuery(""); return; }
+    // Typing anywhere goes to the search box.
+    if (e.key.length === 1 && e.key !== " " && document.activeElement !== input) input.focus();
+  });
+
+  input.value = new URLSearchParams(location.search).get("q") || "";
+  search(true);
+})();
+</script>
+</body>
+</html>
